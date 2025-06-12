@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Jet Lag – Hider Deck Helper</title>
+  <style>
+    :root { --text:#eee; }
+    body{margin:0;padding:1.5rem;background:#111;color:var(--text);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen,Ubuntu,Cantarell,"Open Sans","Helvetica Neue",sans-serif;line-height:1.5;}
+    h1{font-size:1.7rem;margin-bottom:0.5rem;}
+    label,button{font-size:1rem;}
+    select,button{padding:0.4rem 0.6rem;border:1px solid #444;background:#222;color:var(--text);border-radius:0.25rem;margin-right:0.6rem;}
+    button:hover{background:#333;cursor:pointer;}
+    #drawn,#hand{margin-top:1rem;}
+    .pile-title{margin-top:2rem;font-size:1.2rem;border-bottom:1px solid #333;padding-bottom:0.25rem;}
+    .card{border:1px solid #333;border-radius:0.4rem;padding:0.7rem 1rem;margin-bottom:0.8rem;transition:transform 0.15s,outline 0.15s;user-select:none;}
+    .card h3{margin:0 0 0.3rem 0;font-size:1.05rem;}
+    .small{font-size:0.8rem;color:#aaa;}
+    .selected{outline:2px solid #fff;transform:scale(1.03);}  
+    /* colour coding */
+    .time-red{background:#3a1f1f;border-color:#b54343;}
+    .time-orange{background:#3a2a1f;border-color:#d47b30;}
+    .time-yellow{background:#3a351f;border-color:#d4c120;}
+    .time-green{background:#1f3a1f;border-color:#36a336;}
+    .time-blue{background:#1f263a;border-color:#3380d1;}
+    .power{background:#1f2f2c;border-color:#2ba38f;}
+    .curse{background:#2a1740;border-color:#8241d1;}
+    #footer{margin-top:2rem;font-size:0.75rem;color:#666;}
+    .btn-group{margin:0.8rem 0;display:flex;flex-wrap:wrap;gap:0.4rem;}
+  </style>
+</head>
+<body>
+  <h1>Jet Lag: Hider Deck Helper</h1>
+  <p>Deck: <strong id="cardsLeft">100</strong>  |  Hand: <strong id="handCount">0/5</strong></p>
+
+  <!-- Quick draw buttons by question category -->
+  <div class="btn-group">
+    <button data-draw="3" data-keep="1">Matching (3→1)</button>
+    <button data-draw="3" data-keep="1">Measuring (3→1)</button>
+    <button data-draw="2" data-keep="1">Thermometer (2→1)</button>
+    <button data-draw="2" data-keep="1">Radar (2→1)</button>
+    <button data-draw="4" data-keep="2">Tentacles (4→2)</button>
+    <button data-draw="1" data-keep="1">Photo Radar (1→1)</button>
+  </div>
+
+  <button id="keepBtn">Keep Selected</button>
+  <button id="discardBtn">Discard Selected</button>
+  <button id="resetBtn">Reset Deck</button>
+
+  <div class="pile-title">Drawn cards (click to select)</div>
+  <div id="drawn"></div>
+
+  <div class="pile-title">Hand (click to select for discard)</div>
+  <div id="hand"></div>
+
+  <p id="footer">Unofficial companion for <em>Jet Lag – Hide + Seek</em>. For personal use only.</p>
+
+  <script>
+    // -------- helper shuffle --------
+    const shuffle=a=>{for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;};
+
+    // -------- build deck --------
+    const deckBase=[];const push=(id,desc,type)=>deckBase.push({id,desc,type});
+    const tb=[{clr:'red',m:[2,3,5],q:25},{clr:'orange',m:[4,6,10],q:15},{clr:'yellow',m:[6,9,15],q:10},{clr:'green',m:[8,12,20],q:3},{clr:'blue',m:[12,18,30],q:2}];
+    tb.forEach(({clr,m,q})=>{for(let i=0;i<q;i++)push(`Time Bonus – ${clr.charAt(0).toUpperCase()+clr.slice(1)} (${m.join('/')})`,`Add to hide time: S ${m[0]} min • M ${m[1]} min • L ${m[2]} min.`,`time-${clr}`);});
+    const powers=[["Randomize","Swap the seeker’s last question for a random one in the same category."],["Veto","Cancel the current question entirely – no cards are drawn."],["Duplicate","Play a second copy of any one card you’ve already played this turn."],["Move","Immediately relocate up to 0.25 mi before answering."],["Discard 1 Draw 2","Discard one card, draw two."],["Discard 2 Draw 3","Discard two cards, draw three."],["Draw 1 Expand 1","Draw one card, then widen play zone 1 tier for 10 min."]];
+    const pQty=[4,4,2,1,4,4,2];powers.forEach(([n,d],i)=>{for(let j=0;j<pQty[i];j++)push(`Power‑Up – ${n}`,d,'power');});
+    const curses=[["Zoologist","Snap a wild animal; seekers must match class before next question."],["Unguided Tourist","Send Street View (≤500 ft); seekers must locate spot IRL."],["Endless Tumble","Seekers roll a die 100 ft until it lands 5/6."],["Hidden Hangman","Seekers beat you in 5‑letter Hangman (7 misses)."],["Luxury Car","Seekers must photo a costlier car."],["Bridge Troll","Next question asked from under a bridge."],["Cairn","Build rock tower; seekers replicate."],["Urban Explorer","Seekers cannot ask on transit/stations for rest of run."],["Right Turn","Seekers only turn right for 1 h."],["Bird Guide","Film bird; seekers match duration."],["Gambler’s Feet","For 1 h seekers roll steps die each move."],["Spotty Memory","Random category disabled each turn."],["Water Weight","Seekers carry 2 L water each."],["U‑Turn","If riding wrong way, seekers must exit next stop."],["Mediocre Travel Agent","Seekers detour to POI 5–10 min."],["Census Taker","Seekers guess population ±25% at nearest hall."],["Frozen Dot","If seekers within 250 ft of point in 15 min they freeze 30 min."],["Labyrinth","Seekers solve your maze before next question."],["Impressionable Consumer","Seekers must act on recent advert."],["Egg Partner","Egg must stay intact; break −15 min."],["Jam‑Door","For 0.5–3 h seekers roll ≥7 on 2 dice to pass door."],["Drained Brain","Name 3 questions; they’re banned for run."],["Ransom Note","Seekers’ next question must be ransom note."],["Swiss Clock","Seekers clap 15 s after timer ±0.5 s or wait 10 min." ]];
+    curses.forEach(([n,d])=>push(`Curse of the ${n}`,d,'curse'));
+
+    // -------- DOM refs --------
+    const drawnEl=document.getElementById('drawn');
+    const handEl=document.getElementById('hand');
+    const keepBtn=document.getElementById('keepBtn');
+    const discardBtn=document.getElementById('discardBtn');
+    const resetBtn=document.getElementById('resetBtn');
+    const drawCountSel=document.getElementById('drawCount');
+    const cardsLeftTxt=document.getElementById('cardsLeft');
+    const handCountTxt=document.getElementById('handCount');
+    const quickBtns=[...document.querySelectorAll('.btn-group button')];
+
+    // -------- state --------
+    let deck=shuffle([...deckBase]);
+    const HAND_LIMIT=5;
+
+    // -------- util --------
+    const updateCounts=()=>{cardsLeftTxt.textContent=deck.length;handCountTxt.textContent=`${handEl.children.length}/${HAND_LIMIT}`;};
+    const makeCard=card=>{const d=document.createElement('div');d.className=`card ${card.type}`;d.innerHTML=`<h3>${card.id}</h3><p class='small'>${card.desc}</p>`;d.toggleSel=()=>d.classList.toggle('selected');d.addEventListener('click',d.toggleSel);return d;};
+
+    // -------- draw logic --------
+    const drawCards=n=>{
+      if(n>deck.length)return alert('Deck empty – reset.');
+      drawnEl.innerHTML='';
+      deck.splice(0,n).forEach(c=>drawnEl.appendChild(makeCard(c)));
+      updateCounts();
+    };
+
+    // -------- keep selected --------
+    const keepSelected=expected=>{
+      const sel=[...drawnEl.querySelectorAll('.selected')];
+      if(expected && sel.length!==expected)return alert(`Select exactly ${expected} to keep.`);
+      if(handEl.children.length+sel.length>HAND_LIMIT)return alert('Hand limit 5 – discard first.');
+      sel.forEach(el=>{el.classList.remove('selected');handEl.appendChild(el);});
+      // discard the rest silently
+      drawnEl.innerHTML='';
+      updateCounts();
+    };
+
+    // -------- discard from hand --------
+    const discardSelected=()=>{
+      [...handEl.querySelectorAll('.selected')].forEach(el=>el.remove());
+      updateCounts();
+    };
+
+    // -------- quick buttons --------
+    quickBtns.forEach(b=>{
+      b.addEventListener('click',()=>{
+        const d=parseInt(b.dataset.draw,10);const k=parseInt(b.dataset.keep,10);
+        drawCards(d); // auto-draw
+        // inform user to choose keep count
+        setTimeout(()=>alert(`Select ${k} card${k>1?'s':''} to keep, then press "Keep Selected"`),50);
+        keepBtn.onclick=()=>keepSelected(k);
+      });
+    });
+
+    // -------- wire manual controls --------
+    keepBtn.addEventListener('click',()=>keepSelected()); // fallback
+    discardBtn.addEventListener('click',discardSelected);
+    resetBtn.addEventListener('click',()=>{deck=shuffle([...deckBase]);drawnEl.innerHTML='';handEl.innerHTML='';updateCounts();});
+
+    // init
+    updateCounts();
+  </script>
+</body>
+</html>
