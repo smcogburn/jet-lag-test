@@ -98,7 +98,7 @@
     // -------- keep selected --------
     const keepSelected=expected=>{
       const sel=[...drawnEl.querySelectorAll('.selected')];
-      if(expected && sel.length!==expected)return alert(`Select exactly ${expected} to keep.`);
+      //if(expected && sel.length!==expected)return alert(`Select exactly ${expected} to keep.`);
       if(handEl.children.length+sel.length>HAND_LIMIT)return alert('Hand limit 5 – discard first.');
       sel.forEach(el=>{el.classList.remove('selected');handEl.appendChild(el);});
       // discard the rest silently

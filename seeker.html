@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Seeker Question Tracker</title>
+  <style>
+    :root {
+      --asked-filter: grayscale(0.8) opacity(0.4);
+      font-family: sans-serif;
+    }
+    body {
+      margin: 0;
+      background: #fafafa;
+      color: #222;
+    }
+    .tracker-container {
+      padding-bottom: 5rem; /* keep mobile bar clear */
+    }
+    h1 {
+      text-align: center;
+      margin: 1rem 0 0.5rem;
+      font-size: 1.4rem;
+    }
+    .category-title {
+      margin: 0.5rem 0;
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 0.4rem;
+    }
+    .cell {
+      cursor: pointer;
+      padding: 0.75rem;
+      border-radius: 0.5rem;
+      border: 1px solid #ddd;
+      text-align: center;
+      font-size: 0.85rem;
+      user-select: none;
+      transition: transform 0.1s;
+    }
+    .cell:active {
+      transform: scale(0.96);
+    }
+    .cell.asked {
+      filter: var(--asked-filter);
+      text-decoration: line-through;
+    }
+    /* Mobile detail bar */
+    .detail-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: #fff;
+      border-top: 2px solid #333;
+      padding: 0.75rem 1rem;
+      box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.15);
+      display: none;
+      flex-direction: column;
+      gap: 0.5rem;
+      z-index: 1000;
+    }
+    .detail-bar.show {
+      display: flex;
+    }
+    .detail-bar button {
+      align-self: flex-end;
+      padding: 0.4rem 0.9rem;
+      font-size: 0.85rem;
+      border: none;
+      border-radius: 0.4rem;
+      background: #333;
+      color: #fff;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="tracker-container" id="tracker"></div>
+
+  <!-- detail overlay for mobile -->
+  <div class="detail-bar" id="detailBar">
+    <div id="detailText"></div>
+    <button id="toggleBtn"></button>
+  </div>
+
+  <script>
+    // ----------------------------------------------------------------------------------
+    //  DATA
+    // ----------------------------------------------------------------------------------
+    const COLORS = {
+      matching: "#d6e0f0",
+      measuring: "#d9f7d6",
+      radar: "#ffd8c2",
+      thermo: "#fff3c4",
+      tentacles: "#e5d6ff",
+      photo: "#cfe9ff",
+    };
+
+    /**
+     * Category definition list – distilled from the Jet Lag rule‑book.
+     * Each entry provides name, background colour, wording template, and item labels.
+     */
+    const CATEGORIES = [
+      {
+        name: "Matching",
+        color: COLORS.matching,
+        template: (item) => `Is your nearest ${item} the same as my nearest ${item}?`,
+        items: [
+          "Commercial Airport",
+          "Transit Line",
+          "Station Name Length",
+          "Street or Path",
+          "1st Admin (State)",
+          "2nd Admin (County)",
+          "3rd Admin (City/Town)",
+          "4th Admin (Borough)",
+          "Mountain",
+          "Landmass",
+          "Park",
+          "Amusement Park",
+          "Zoo",
+          "Aquarium",
+          "Golf Course",
+          "Museum",
+          "Movie Theatre",
+          "Hospital",
+          "Library",
+          "Foreign Consulate",
+        ],
+      },
+      {
+        name: "Measuring",
+        color: COLORS.measuring,
+        template: (item) => `Compared to me, are you closer to or further from ${item}?`,
+        items: [
+          "A Commercial Airport",
+          "A High‑Speed Train Line",
+          "A Rail Station",
+          "An International Border",
+          "A 1st Admin Border (State)",
+          "A 2nd Admin Border (County)",
+          "4th Admin (Borough)",
+          "Sea Level",
+          "A Body of Water",
+          "A Coastline",
+          "A Mountain",
+          "A Park",
+          "Amusement Park",
+          "Zoo",
+          "Aquarium",
+          "Golf Course",
+          "Museum",
+          "Movie Theatre",
+          "Hospital",
+          "Library",
+          "Foreign Consulate",
+        ],
+      },
+      {
+        name: "Radar",
+        color: COLORS.radar,
+        template: (item) => `Are you within ${item} of me?`,
+        items: [
+          "0.25 mi (402 m)",
+          "0.5 mi (805 m)",
+          "1 mi (1.6 km)",
+          "3 mi (4.8 km)",
+          "5 mi (8.0 km)",
+          "10 mi (16 km)",
+          "25 mi (40 km)",
+          "50 mi (80 km)",
+          "100 mi (161 km)",
+        ],
+      },
+      {
+        name: "Thermometer",
+        color: COLORS.thermo,
+        template: (item) => `I just travelled at least ${item}. Am I hotter or colder?`,
+        items: ["0.5 mi", "3 mi", "10 mi", "50 mi"],
+      },
+      {
+        name: "Tentacles",
+        color: COLORS.tentacles,
+        template: (item) => {
+          const [place, dist] = item.split("|");
+          return `Of all the ${place.trim()} within ${dist.trim()} of me, which are you closest to?`;
+        },
+        items: [
+          "Museums | 1 mi",
+          "Libraries | 1 mi",
+          "Movie Theatres | 1 mi",
+          "Hospitals | 1 mi",
+          "Metro Lines | 15 mi",
+          "Zoos | 15 mi",
+          "Aquariums | 15 mi",
+          "Amusement Parks | 15 mi",
+        ],
+      },
+      {
+        name: "Photo",
+        color: COLORS.photo,
+        template: (item) => `Send a photo of ${item}.`,
+        items: [
+          "a Tree (entire tree)",
+          "the Sky (phone on ground; shot straight up)",
+          "You (selfie; arm parallel)",
+          "the Widest Street you see",
+          "Tallest structure in your sightline",
+          "Any building visible from station",
+          "Tallest building visible from station",
+          "Trace nearest street / path",
+          "Two buildings (5×5′ section w/ 3 elements)",
+          "Restaurant interior (no zoom; from outside window)",
+          "Train platform (5×5′ section w/ 3 elements)",
+          "Park (phone perpendicular; 5′ from obstruction)",
+          "Grocery‑store aisle (down aisle)",
+          "Place of worship (5×5′ section w/ 3 elements)",
+          "½‑mile of streets traced (continuous, 5 turns)",
+          "Tallest mountain visible from station (3× zoom)",
+          "Biggest body of water in your zone",
+          "Five buildings (bottom plus up to 4 stories)",
+        ],
+      },
+    ];
+
+    // ----------------------------------------------------------------------------------
+    //  RENDERING & STATE MANAGEMENT (Vanilla JS)
+    // ----------------------------------------------------------------------------------
+    const tracker = document.getElementById("tracker");
+    const detailBar = document.getElementById("detailBar");
+    const detailText = document.getElementById("detailText");
+    const toggleBtn = document.getElementById("toggleBtn");
+
+    // Persist asked/un‑asked across refreshes so the page survives a reload mid‑game
+    const askedState = JSON.parse(localStorage.getItem("seekerAsked") || "{}");
+
+    function saveState() {
+      localStorage.setItem("seekerAsked", JSON.stringify(askedState));
+    }
+
+    function render() {
+      tracker.innerHTML = "";
+
+      const h1 = document.createElement("h1");
+      h1.textContent = "Seeker Question Tracker";
+      tracker.appendChild(h1);
+
+      CATEGORIES.forEach((cat, catIdx) => {
+        const wrapper = document.createElement("div");
+        wrapper.style.width = "95%";
+        wrapper.style.maxWidth = "900px";
+        wrapper.style.margin = "1rem auto";
+
+        const title = document.createElement("div");
+        title.className = "category-title";
+        title.textContent = cat.name;
+        wrapper.appendChild(title);
+
+        const grid = document.createElement("div");
+        grid.className = "grid";
+
+        cat.items.forEach((label, idx) => {
+          const key = `${catIdx}-${idx}`;
+          const cell = document.createElement("div");
+          cell.className = "cell" + (askedState[key] ? " asked" : "");
+          cell.style.background = cat.color;
+          cell.textContent = label;
+          cell.dataset.key = key;
+          cell.dataset.detail = cat.template(label);
+          cell.title = cat.template(label); // desktop hover tooltip
+          grid.appendChild(cell);
+        });
+
+        wrapper.appendChild(grid);
+        tracker.appendChild(wrapper);
+      });
+    }
+
+    function openDetail(target) {
+      const key = target.dataset.key;
+      const detail = target.dataset.detail;
+      detailText.textContent = detail;
+      toggleBtn.textContent = askedState[key] ? "Undo Asked" : "Mark Asked";
+
+      toggleBtn.onclick = () => {
+        askedState[key] = !askedState[key];
+        saveState();
+        render();
+        closeDetail();
+      };
+
+      detailBar.classList.add("show");
+    }
+
+    function closeDetail() {
+      detailBar.classList.remove("show");
+    }
+
+    // ————————————————————————————————————————————————
+    //  EVENT LISTENERS
+    // ————————————————————————————————————————————————
+    detailBar.addEventListener("click", (e) => {
+      if (e.target === detailBar) closeDetail(); // tap outside interior to dismiss
+    });
+
+    tracker.addEventListener("click", (e) => {
+      const cell = e.target.closest(".cell");
+      if (cell) openDetail(cell);
+    });
+
+    // Keyboard accessibility: Enter / Space toggles
+    tracker.addEventListener("keydown", (e) => {
+      if ((e.key === "Enter" || e.key === " ") && e.target.classList.contains("cell")) {
+        e.preventDefault();
+        openDetail(e.target);
+      }
+    });
+
+    // Initial display
+    render();
+  </script>
+</body>
+</html>
